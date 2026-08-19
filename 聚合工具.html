@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>站点聚合工具</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <div class="layout">
+    <div class="sidebar">
+      <header class="sidebar-header">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">路</div>
+          <div>
+            <h1>公交线路规划工作台</h1>
+            <p class="sub">站点聚合、智能规划与地图手动调整</p>
+          </div>
+        </div>
+        <div class="workflow-strip" aria-label="工作流程">
+          <span><i>1</i>导入</span><b>›</b><span><i>2</i>聚合</span><b>›</b><span><i>3</i>规划</span><b>›</b><span><i>4</i>调整</span>
+        </div>
+      </header>
+
+      <div class="card step-card" data-step="1">
+        <div class="card-title-row"><h2>数据导入</h2><span class="card-tag required">必需</span></div>
+        <div class="database-status"><span class="status-dot"></span><span>站点数据已就绪</span><small>共 957 个站点</small></div>
+        <div class="file-row"><label>待聚合文件：</label><input type="file" id="summaryInput" accept=".csv" /></div>
+        <div id="fileMsg" class="msg"></div>
+      </div>
+
+      <div class="card optional-card">
+        <div class="card-title-row"><h2>直接导入已有路线</h2><span class="card-tag">可选</span></div>
+        <div class="file-row"><label>路线文件：</label><input type="file" id="routeExcelInput" accept=".xlsx,.xls" /></div>
+        <div class="param-hint block-hint">可直接显示此前由本工具导出的路线文件。</div>
+        <button class="btn btn-ghost btn-block" id="importRouteExcelBtn" disabled>导入并在地图显示全部线路</button>
+        <div id="routeImportMsg" class="msg"></div>
+      </div>
+
+      <div class="card step-card hidden" id="configCard" data-step="2">
+        <div class="card-title-row"><h2>聚合参数</h2><span class="card-tag">按需调整</span></div>
+        <div class="param-row"><label>覆盖半径：</label><input type="number" id="maxDist" value="500" min="100" max="5000" step="50" /><span class="param-hint">米</span></div>
+        <div class="param-row"><label>最少人数：</label><input type="number" id="minPeople" value="0" min="0" max="999" step="1" /><span class="param-hint">0=不限制，不足则并入邻近区</span></div>
+        <div class="param-row"><label>上车点合并：</label><span class="param-hint">150 米内自动合并</span></div>
+        <button class="btn btn-primary btn-block primary-action" id="runBtn">开始聚合计算</button>
+        <div id="runMsg" class="msg"></div>
+      </div>
+
+      <div class="card step-card hidden" id="resultCard" data-step="3">
+        <div class="card-title-row"><h2>聚合结果</h2><span class="card-tag success-tag">可在地图修改</span></div>
+        <div class="stats-bar" id="statsBar"></div>
+        <div class="table-wrap">
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th>区域</th>
+                <th>上车公交站</th>
+                <th>人数</th>
+                <th>站点数</th>
+                <th>覆盖站点</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="inline-tool-panel">
+          <div id="aggregationStopSelectionInfo" class="param-hint">点击地图上的上车点，可选择并删除该聚合上车点</div>
+          <button class="btn btn-ghost" id="deleteAggregatedStopBtn" disabled>删除选中的上车点</button>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-primary" id="downloadBtn">下载聚合CSV</button>
+          <button class="btn btn-ghost" id="resetBtn">重新开始</button>
+        </div>
+      </div>
+
+      <div class="card step-card route-card hidden" id="routeCard" data-step="3">
+        <div class="card-title-row"><h2>线路规划</h2><span class="card-tag required">下一步</span></div>
+        <div class="workspace-tabs" id="routeWorkspaceTabs" role="tablist" aria-label="线路规划工作区">
+          <button class="workspace-tab active" type="button" data-route-view="setup" role="tab" aria-selected="true"><span>1</span>规划设置</button>
+          <button class="workspace-tab" type="button" data-route-view="results" role="tab" aria-selected="false"><span>2</span>路线结果</button>
+          <button class="workspace-tab" type="button" data-route-view="manual" role="tab" aria-selected="false" disabled><span>3</span>手动调整</button>
+        </div>
+        <div id="routeMsg" class="msg workspace-status" aria-live="polite"></div>
+        <div class="workspace-view active" id="routeSetupView" data-route-panel="setup" role="tabpanel">
+        <div class="param-row"><label>线路数量：</label><input type="number" id="routeCount" value="3" min="1" max="20" step="1" /><span class="param-hint">条班车</span></div>
+        <div class="param-row"><label>线路起点：</label><select id="routeStartMode" class="sel" style="flex:1"><option value="auto">程序自动选择</option><option value="manual">手动选择每条线路</option></select></div>
+        <div id="manualStartPanel" class="start-select-panel hidden">
+          <div class="param-hint" style="line-height:1.45">先选择下面的线路，再直接点击地图上的上车点。每个站点只能作为一条线路的起点。</div>
+          <div id="manualStartList"></div>
+        </div>
+        <div class="field-caption">终点工厂</div>
+        <div class="radio-row">
+          <label><input type="radio" name="factory" value="yinhu" checked /> 银湖工厂</label>
+          <label><input type="radio" name="factory" value="huashan" /> 华山工厂</label>
+        </div>
+        <button class="btn btn-primary btn-block primary-action" id="routeBtn">开始线路规划</button>
+        </div>
+        <div class="workspace-view" id="routeResultsView" data-route-panel="results" role="tabpanel">
+        <div class="workspace-empty" id="routeEmptyState">
+          <div class="empty-icon" aria-hidden="true">↗</div>
+          <strong>尚未生成路线</strong>
+          <span>完成规划后，这里会集中显示线路指标、站序和导出操作。</span>
+          <button class="btn btn-ghost" type="button" data-route-view-jump="setup">返回规划设置</button>
+        </div>
+        <div id="routeStats" class="stats-bar route-stats"></div>
+        <div id="routeList" class="route-list"></div>
+        <div id="routeActions" class="card-actions hidden">
+          <button class="btn btn-primary" id="downloadRouteBtn">下载线路Excel</button>
+          <button class="btn btn-ghost" id="exportMapBtn">导出路线图</button>
+          <button class="btn btn-ghost" id="replanCurrentStopsBtn">按当前上车点重新全局规划</button>
+        </div>
+        </div>
+        <div class="workspace-view" id="routeManualView" data-route-panel="manual" role="tabpanel">
+        <div id="manualEditPanel" class="manual-editor hidden">
+          <div class="manual-editor-head"><h3>地图手动调整</h3><span>可选现有站点，也可新增上车点</span></div>
+          <div id="selectedStopInfo" class="manual-info">点击地图上的上车点开始调整</div>
+          <div class="manual-section manual-add-section" id="manualAddStopSection">
+            <div class="manual-section-title">新增上车点</div>
+            <div id="addStopPointInfo" class="manual-help">点击“在地图选点”，再点击地图上要新增的位置</div>
+            <div class="manual-actions">
+              <button class="btn btn-ghost btn-wide" id="startAddStopBtn">在地图选点</button>
+              <button class="btn btn-ghost hidden" id="cancelAddStopBtn">取消选点</button>
+            </div>
+            <div class="manual-control"><label class="manual-control-label" for="addStopRouteSelect">所属线路</label><select id="addStopRouteSelect" class="sel" disabled></select></div>
+            <div class="manual-control"><label class="manual-control-label" for="addStopNameInput">站点名称</label><input id="addStopNameInput" class="manual-input" type="text" value="手动上车点" disabled /></div>
+            <div class="manual-control"><label class="manual-control-label" for="addStopPeopleInput">上车人数</label><input id="addStopPeopleInput" class="manual-input" type="number" min="0" max="45" step="1" value="0" disabled /></div>
+            <div id="addStopInsertHint" class="manual-help">选点后将自动计算绕路较少的插入位置</div>
+            <div class="manual-actions"><button class="btn btn-primary btn-wide" id="confirmAddStopBtn" disabled>添加并局部重新规划</button></div>
+          </div>
+          <div class="manual-section">
+            <div class="manual-section-title">线路归属</div>
+            <div class="manual-control"><label class="manual-control-label" for="targetRouteSelect">目标线路</label><select id="targetRouteSelect" class="sel"></select></div>
+            <div class="manual-actions">
+              <button class="btn btn-ghost" id="moveStopBtn" disabled>移动到所选线路</button>
+              <button class="btn btn-ghost manual-danger" id="deleteRouteStopBtn" disabled>删除此站点</button>
+            </div>
+            <div class="manual-control"><label class="manual-control-label" for="swapStopSelect">交换站点</label><select id="swapStopSelect" class="sel"></select></div>
+            <div id="swapStopHint" class="manual-help">选择目标线路中要与当前站点交换的站点</div>
+            <div class="manual-actions"><button class="btn btn-primary btn-wide" id="swapStopsBtn" disabled>交换两个站点所属线路</button></div>
+          </div>
+          <div class="manual-section">
+            <div class="manual-section-title">站点顺序</div>
+            <div class="manual-help">在地图上选中本线路的非起点站，可将其直接设为新起点</div>
+            <div class="manual-control"><label class="manual-control-label" for="subsequentStopSelect">后续站点</label><select id="subsequentStopSelect" class="sel"></select></div>
+            <div class="manual-actions">
+              <button class="btn btn-ghost" id="moveSubsequentEarlierBtn" disabled>前移一站</button>
+              <button class="btn btn-ghost" id="moveSubsequentLaterBtn" disabled>后移一站</button>
+              <button class="btn btn-primary btn-wide" id="setSelectedStopAsStartBtn" disabled>设为本线路新起点</button>
+              <button class="btn btn-ghost btn-wide" id="replanSelectedRouteBtn" disabled>仅重新规划所选起点的线路</button>
+            </div>
+          </div>
+          <div class="manual-section">
+            <div class="manual-section-title">站点位置</div>
+            <div class="manual-control"><label class="manual-control-label" for="nearbyStopSelect">附近公交站</label><select id="nearbyStopSelect" class="sel"></select></div>
+            <div class="manual-actions"><button class="btn btn-ghost btn-wide" id="replaceStopBtn" disabled>更换为候选站</button></div>
+          </div>
+          <div class="manual-section">
+            <div class="manual-section-title">局部路线</div>
+            <div class="manual-actions">
+              <button class="btn btn-ghost" id="startLocalRouteBtn" disabled>调整下一局部路段</button>
+              <button class="btn btn-primary hidden" id="applyLocalRouteBtn">应用局部改道</button>
+              <button class="btn btn-ghost hidden" id="cancelLocalRouteBtn">取消</button>
+              <button class="btn btn-ghost" id="resetLocalRouteBtn" disabled>恢复该段自动路线</button>
+            </div>
+          </div>
+          <div id="manualEditMsg" class="msg"></div>
+        </div>
+        </div>
+      </div>
+      <div class="privacy-note"><span aria-hidden="true">✓</span> 文件仅在当前浏览器中处理，不会上传到服务器</div>
+    </div>
+
+    <div class="main">
+      <div class="map-toolbar">
+        <button class="map-panel-toggle" id="sidebarToggleBtn" type="button" aria-expanded="true" title="收起或展开操作面板"><span aria-hidden="true">☰</span><span class="toggle-label">收起面板</span></button>
+        <div class="map-tip"><span class="map-tip-dot"></span>地图支持缩放、拖动与站点点击操作</div>
+      </div>
+      <div id="map"><span class="map-hint">地图加载中...</span></div>
+      <div class="legend" id="legend" style="display:none"></div>
+    </div>
+  </div>
+
+  <script src="stops_data.js"></script>
+  <script src="js/vendor/xlsx.full.min.js"></script>
+  <script>window._AMapSecurityConfig = { securityJsCode: '2cf7a00c52e471891bd1e9cac63cb35b' };</script>
+  <script src="js/app-state.js"></script>
+  <script src="js/io/csv.js"></script>
+  <script src="js/services/routing-service.js"></script>
+  <script src="js/domain/aggregation.js"></script>
+  <script src="js/domain/route-planner.js"></script>
+  <script src="js/io/route-excel.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (function () {
+      var s = document.createElement('script');
+      s.src = 'https://webapi.amap.com/maps?v=2.0&key=2a311bfc3933b802baf462d8fe0d7b14&callback=initMap';
+      s.onerror = function () {
+        var hint = document.querySelector('#map .map-hint');
+        if (hint) hint.textContent = '地图加载失败';
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+</body>
+</html>
